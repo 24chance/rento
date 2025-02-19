@@ -10,4 +10,5 @@ asyncpg==0.28.0
 databases==0.9.0
 uvicorn==0.22.0
 alembic==1.11.3
+httpx==0.23.0
 
