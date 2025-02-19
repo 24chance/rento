@@ -11,6 +11,8 @@ class User(Base):
     username = Column(String)
     profile_picture = Column(String)
     google_id = Column(String, unique=True)
+    password = Column(String)
+    role = Column(String)
 
     posts = relationship("Post", back_populates="owner") 
 

@@ -1,5 +1,5 @@
 import os
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from authlib.integrations.starlette_client import OAuth, OAuthError
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
@@ -15,14 +15,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.future import select
 from database import engine
+from utils import hash_password, verify_password, create_jwt_token, verify_jwt_token
+from schemas import UserCreate, UserLogin
 
-
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-load_dotenv()
 
 router = APIRouter()
+
+
+load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
@@ -43,18 +43,16 @@ AsyncSessionLocal = sessionmaker(
     expire_on_commit=False,
 )
 
-def create_jwt_token(data: dict):
-    expire = datetime.utcnow() + timedelta(minutes=int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES")))
-    data.update({"exp": expire})
-    return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
-def verify_jwt_token(token: str = Depends(oauth2_scheme)):
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-    
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    payload = verify_jwt_token(token)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+    return payload
+
+
 @router.get("/protected")
 async def protected_endpoint(request: Request):
     token = request.cookies.get("access_token")
@@ -68,22 +66,17 @@ async def protected_endpoint(request: Request):
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 
+# Google OAuth, login/signup
 @router.get("/auth/google/login")
 async def login_via_google(request: Request):
     url = request.url_for("auth")
     return await oauth.google.authorize_redirect(request, url)
 
-import logging
-
-# Setup basic logging
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
-
+# Google OAuth callback
 @router.get("/auth")
-async def auth(request: Request, db: Session = Depends(get_db)):
+async def auth(request: Request, db: Session = Depends(get_db)):    
     try:
         # Try to get the token from Google's OAuth flow
-        logger.debug("Starting OAuth flow...")
         token = await oauth.google.authorize_access_token(request)
         if not token:
             raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="OAuth token missing or invalid")
@@ -93,7 +86,6 @@ async def auth(request: Request, db: Session = Depends(get_db)):
         if not user_info:
             raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Failed to fetch user information")
         
-        logger.debug(f"User info: {user_info}")
 
 
         # Check if user already exists in the database
@@ -112,12 +104,10 @@ async def auth(request: Request, db: Session = Depends(get_db)):
             )
             db.add(new_user)
             # Debug: Check if the new user is added to the session
-            logger.debug(f"Adding new user to the session: {new_user}")
             await db.commit()
             await db.refresh(new_user)
 
              # Debug: Log after commit and refresh
-            logger.debug(f"New user added to DB with ID: {new_user.id}")
 
         # Generate JWT token
         jwt_token = create_jwt_token({"sub": user_info["email"]})
@@ -134,11 +124,9 @@ async def auth(request: Request, db: Session = Depends(get_db)):
         return response
     
     except OAuthError as e:
-        logger.error(f"OAuthError: {str(e)}")
         raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail=f"OAuth error: {str(e)}")
     
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
         raise HTTPException(status_code=HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unexpected error: {str(e)}")
 
 @router.get("/auth/logout")
@@ -146,3 +134,51 @@ async def logout(request: Request):
     response = RedirectResponse(url='/')
     response.delete_cookie("access_token")  # Delete the JWT token cookie
     return response
+
+
+# manual signup here 
+@router.post("/signup")
+async def signup(user: UserCreate, db: AsyncSession = Depends(get_db)):
+    # Check if email or username already exists
+    stmt = select(User).where((User.email == user.email) | (User.username == user.username))
+    result = await db.execute(stmt)
+    existing_user = result.scalars().first()
+
+    if existing_user:
+        if existing_user.email == user.email:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        if existing_user.username == user.username:
+            raise HTTPException(status_code=400, detail="Username already taken")
+
+    # Hash password and create user
+    new_user = User(
+        email=user.email,
+        username=user.username,
+        password=hash_password(user.password),
+        role=user.role,
+    )
+
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)
+
+    return {"message": "User registered successfully"}
+
+
+
+# manual login here
+@router.post("/login")
+async def login(user: UserLogin, db: AsyncSession = Depends(get_db)):
+    # Check if user exists
+    stmt = select(User).where(User.email == user.email)
+    result = await db.execute(stmt)
+    existing_user = result.scalars().first()
+
+    if not existing_user or not verify_password(user.password, existing_user.password):
+        raise HTTPException(status_code=400, detail="Invalid credentials")
+
+    # Generate JWT token
+    jwt_token = create_jwt_token({"sub": existing_user.email})
+
+    return {"access_token": jwt_token, "token_type": "bearer"}
+
