@@ -7,7 +7,7 @@ python_jose==3.3.0
 SQLAlchemy==2.0.36
 starlette==0.45.3
 asyncpg==0.28.0
-databases==0.7.1
+databases==0.7.0
 uvicorn==0.22.0
 alembic==1.11.5
 
