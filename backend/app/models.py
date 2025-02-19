@@ -1,7 +1,8 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, Float, DateTime
 from database import Base 
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import relationship
+from datetime import datetime
 
 class User(Base):
     __tablename__ = 'users'
@@ -14,15 +15,19 @@ class User(Base):
     password = Column(String)
     role = Column(String)
 
-    posts = relationship("Post", back_populates="owner") 
+    houses = relationship("House", back_populates="user")
 
 
-class Post(Base):
-    __tablename__ = 'posts'
+class House(Base):
+    __tablename__ = "houses"
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, index=True)
-    content = Column(String)
-    owner_id = Column(Integer, ForeignKey('users.id'))  # This is the foreign key to User table
+    description = Column(String)
+    price = Column(Float)
+    location = Column(String)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    owner = relationship("User", back_populates="posts") 
+    user = relationship("User", back_populates="houses")

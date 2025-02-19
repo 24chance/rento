@@ -9,14 +9,14 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from fastapi.security import OAuth2PasswordBearer
 from database import get_db
-from models import User, Post
+from models import User, House
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.future import select
 from database import engine
 from utils import hash_password, verify_password, create_jwt_token, verify_jwt_token
-from schemas import UserCreate, UserLogin
+from schemas import UserCreate, UserLogin, HouseCreate, HouseUpdate, HouseOut
 
 
 router = APIRouter()
@@ -45,12 +45,28 @@ AsyncSessionLocal = sessionmaker(
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
-async def get_current_user(token: str = Depends(oauth2_scheme)):
+# Update the get_current_user function to properly extract user data
+async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
+    # Verify the JWT token
     payload = verify_jwt_token(token)
     if not payload:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
-    return payload
+    # Get user email from the token payload (sub claim in the JWT)
+    user_email = payload.get("sub")
+    if not user_email:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
+
+    # Retrieve the user from the database using the email
+    stmt = select(User).filter(User.email == user_email)
+    result = await db.execute(stmt)
+    user = result.scalars().first()
+
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    # Return the user (with all necessary attributes like id, role, etc.)
+    return user
 
 
 @router.get("/protected")
@@ -182,3 +198,117 @@ async def login(user: UserLogin, db: AsyncSession = Depends(get_db)):
 
     return {"access_token": jwt_token, "token_type": "bearer"}
 
+
+
+
+
+
+
+# --------------------------------houses------------------------------
+
+# create house
+@router.post("/houses", response_model=HouseOut)
+async def create_house(house: HouseCreate, db: AsyncSession = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    print(current_user)
+    new_house = House(
+        title=house.title,
+        description=house.description,
+        price=house.price,
+        location=house.location,
+        user_id=current_user.id,
+    )
+
+    db.add(new_house)
+    await db.commit()
+    await db.refresh(new_house)
+
+    return new_house
+
+
+# get all houses
+from typing import List
+@router.get("/houses", response_model=List[HouseOut])
+async def get_houses(db: AsyncSession = Depends(get_db)):
+    stmt = select(House)
+    
+    result = await db.execute(stmt)
+    houses = result.scalars().all()
+
+    return houses
+
+
+# get houses of a logged in user 
+@router.get("/houses/user", response_model=List[HouseOut])
+async def get_houses_of_user(db: AsyncSession = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    # Filter houses by the current user's ID
+    stmt = select(House).filter(House.user_id == current_user.id)
+    
+    result = await db.execute(stmt)
+    houses = result.scalars().all()
+
+    return houses
+
+# get a specific houser for a logged in user
+@router.get("/houses/user/{house_id}", response_model=HouseOut)
+async def get_house_of_user_by_id(house_id: int, db: AsyncSession = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    # Get the specific house by ID and filter by the current user's ID 
+    stmt = select(House).filter(House.id == house_id, House.user_id == current_user.id)
+
+    result = await db.execute(stmt)
+    house = result.scalars().first()
+
+    if not house:
+        raise HTTPException(status_code=404, detail="House not found or not authorized to view this house")
+
+    return house
+
+# get a specific house 
+@router.get("/houses/{house_id}", response_model=HouseOut)
+async def get_house_by_id(house_id: int, db: AsyncSession = Depends(get_db)):
+    # Get the specific house by ID and filter by the current user's ID 
+    stmt = select(House).filter(House.id == house_id)
+
+    result = await db.execute(stmt)
+    house = result.scalars().first()
+
+    if not house:
+        raise HTTPException(status_code=404, detail="House not found or not authorized to view this house")
+
+    return house
+
+# update house 
+@router.patch("/houses/{house_id}", response_model=HouseOut)
+async def update_house(house_id: int, house: HouseUpdate, db: AsyncSession = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    stmt = select(House).filter(House.id == house_id)
+    result = await db.execute(stmt)
+    existing_house = result.scalars().first()
+
+    if not existing_house:
+        raise HTTPException(status_code=404, detail="House not found")
+
+    existing_house.title = house.title
+    existing_house.description = house.description
+    existing_house.price = house.price
+    existing_house.location = house.location
+    existing_house.updated_at = datetime.utcnow()
+
+    await db.commit()
+    await db.refresh(existing_house)
+
+    return existing_house
+
+
+# delete a house 
+@router.delete("/houses/{house_id}", response_model=HouseOut)
+async def delete_house(house_id: int, db: AsyncSession = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    stmt = select(House).filter(House.id == house_id)
+    result = await db.execute(stmt)
+    house = result.scalars().first()
+
+    if not house:
+        raise HTTPException(status_code=404, detail="House not found")
+
+    await db.delete(house)
+    await db.commit()
+
+    return house

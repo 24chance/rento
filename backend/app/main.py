@@ -4,7 +4,13 @@ from starlette.middleware.sessions import SessionMiddleware
 from dotenv import load_dotenv
 import os
 from fastapi.middleware.cors import CORSMiddleware
+from database import engine, Base
 
+# Ensure all tables are created based on your models
+async def create_tables():
+    async with engine.begin() as conn:  # Start a new connection
+        # Create all tables
+        await conn.run_sync(Base.metadata.create_all)
 
 
 app = FastAPI()
@@ -30,6 +36,10 @@ app.add_middleware(
 
 # Add the session middleware
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY"))
+
+@app.on_event("startup")
+async def startup():
+    await create_tables()  # Create tables when the app starts
 
 app.include_router(auth_router)
 
