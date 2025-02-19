@@ -20,4 +20,5 @@ Base = declarative_base()
 # Dependency to get the DB session
 async def get_db():
     async with SessionLocal() as session:
+        session.execute("SET timezone = 'UTC'")  # Ensure PostgreSQL operates in UTC
         yield session

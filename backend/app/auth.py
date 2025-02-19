@@ -5,18 +5,18 @@ from starlette.requests import Request
 from starlette.responses import RedirectResponse
 from starlette.status import HTTP_400_BAD_REQUEST, HTTP_500_INTERNAL_SERVER_ERROR
 from jose import jwt, JWTError
-from datetime import datetime, timedelta
+from datetime import datetime
 from dotenv import load_dotenv
 from fastapi.security import OAuth2PasswordBearer
 from database import get_db
-from models import User, House
+from models import User, House, Booking
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.future import select
 from database import engine
 from utils import hash_password, verify_password, create_jwt_token, verify_jwt_token
-from schemas import UserCreate, UserLogin, HouseCreate, HouseUpdate, HouseOut
+from schemas import UserCreate, UserLogin, HouseCreate, HouseUpdate, HouseOut, BookingCreate, BookingOut
 
 
 router = APIRouter()
@@ -146,7 +146,7 @@ async def auth(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unexpected error: {str(e)}")
 
 @router.get("/auth/logout")
-async def logout(request: Request):
+async def logout():
     response = RedirectResponse(url='/')
     response.delete_cookie("access_token")  # Delete the JWT token cookie
     return response
@@ -248,7 +248,7 @@ async def get_houses_of_user(db: AsyncSession = Depends(get_db), current_user: d
 
     return houses
 
-# get a specific houser for a logged in user
+# get a specific house for a logged in user
 @router.get("/houses/user/{house_id}", response_model=HouseOut)
 async def get_house_of_user_by_id(house_id: int, db: AsyncSession = Depends(get_db), current_user: dict = Depends(get_current_user)):
     # Get the specific house by ID and filter by the current user's ID 
@@ -278,7 +278,7 @@ async def get_house_by_id(house_id: int, db: AsyncSession = Depends(get_db)):
 
 # update house 
 @router.patch("/houses/{house_id}", response_model=HouseOut)
-async def update_house(house_id: int, house: HouseUpdate, db: AsyncSession = Depends(get_db), current_user: dict = Depends(get_current_user)):
+async def update_house(house_id: int, house: HouseUpdate, db: AsyncSession = Depends(get_db)):
     stmt = select(House).filter(House.id == house_id)
     result = await db.execute(stmt)
     existing_house = result.scalars().first()
@@ -300,7 +300,7 @@ async def update_house(house_id: int, house: HouseUpdate, db: AsyncSession = Dep
 
 # delete a house 
 @router.delete("/houses/{house_id}", response_model=HouseOut)
-async def delete_house(house_id: int, db: AsyncSession = Depends(get_db), current_user: dict = Depends(get_current_user)):
+async def delete_house(house_id: int, db: AsyncSession = Depends(get_db)):
     stmt = select(House).filter(House.id == house_id)
     result = await db.execute(stmt)
     house = result.scalars().first()
@@ -312,3 +312,134 @@ async def delete_house(house_id: int, db: AsyncSession = Depends(get_db), curren
     await db.commit()
 
     return house
+
+
+
+
+
+# --------------------------------------bookings----------------------------------
+from sqlalchemy.sql import or_
+
+# create a booking
+@router.post("/bookings", response_model=BookingOut)
+async def create_booking(booking: BookingCreate, db: AsyncSession = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    # Check if house exists
+    stmt = select(House).filter(House.id == booking.house_id)
+    result = await db.execute(stmt)
+    house = result.scalars().first()
+
+
+    if not house:
+        raise HTTPException(status_code=404, detail="House not found")
+    
+
+    # Check if the dates overlap with existing bookings
+    stmt = select(Booking).filter(
+        Booking.house_id == booking.house_id,
+        Booking.status != booking.status,
+        or_(Booking.check_in <= booking.check_out, Booking.check_out >= booking.check_in)
+    )
+    result = await db.execute(stmt)
+    conflicting_booking = result.scalars().first()
+
+    if conflicting_booking:
+        raise HTTPException(status_code=400, detail="The property is already booked for these dates")
+
+    # Create new booking
+    new_booking = Booking(
+        house_id=booking.house_id,
+        user_id=current_user.id,
+        check_in=booking.check_in,
+        check_out=booking.check_out,
+    )
+    db.add(new_booking)
+    await db.commit()
+    await db.refresh(new_booking)
+
+    return new_booking
+
+
+# confirm the booking 
+@router.put("/bookings/{booking_id}/confirm")
+async def confirm_booking(booking_id: int, db: AsyncSession = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    stmt = select(Booking).filter(Booking.id == booking_id)
+    result = await db.execute(stmt) 
+    booking = result.scalars().first()
+
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    
+    if booking.status == 'cancelled':
+        raise HTTPException(status_code=400, detail="Canceled bookings cannot be confirmed")
+
+    # Ensure that `house` is loaded first
+    stmt = select(House).filter(House.id == booking.house_id)
+    result = await db.execute(stmt)
+    house = result.scalars().first()
+
+    if not house:
+        raise HTTPException(status_code=404, detail="House not found")
+
+    if house.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to confirm this booking")
+
+    booking.status = 'confirmed'
+    await db.commit() 
+    await db.refresh(booking)
+
+    return booking
+
+
+
+# cancel the booking 
+@router.put("/bookings/{booking_id}/cancel")
+async def cancel_booking(booking_id: int, db: AsyncSession = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    stmt = select(Booking).filter(Booking.id == booking_id)
+    result = await db.execute(stmt) 
+    booking = result.scalars().first()
+
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    
+    if booking.status == 'cancelled':
+        raise HTTPException(status_code=400, detail="Booking is already cancelled")
+
+    # Ensure that `house` is loaded first
+    stmt = select(House).filter(House.id == booking.house_id)
+    result = await db.execute(stmt)
+    house = result.scalars().first()
+
+    if not house:
+        raise HTTPException(status_code=404, detail="House not found")
+
+    if house.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to cancel this booking")
+
+    booking.status = 'cancelled'
+    await db.commit() 
+    await db.refresh(booking)
+
+    return booking
+
+# get bookings to a specific user 
+@router.get("/bookings/user", response_model=List[BookingOut])
+async def get_user_bookings(
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    stmt = select(Booking).filter(Booking.user_id == current_user.id)
+    result = await db.execute(stmt)
+    bookings = result.scalars().all()
+
+    return bookings
+
+# get all bookings
+@router.get("/bookings/all", response_model=List[BookingOut])
+async def get_all_bookings(
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = select(Booking)
+    result = await db.execute(stmt)
+    bookings = result.scalars().all()
+
+    return bookings
