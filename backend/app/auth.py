@@ -16,7 +16,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.future import select
 from database import engine
 from utils import hash_password, verify_password, create_jwt_token, verify_jwt_token
-from schemas import UserCreate, UserLogin, HouseCreate, HouseUpdate, HouseOut, BookingCreate, BookingOut
+from schemas import UserBase, UserUpdate, HouseCreate, HouseUpdate, HouseOut, BookingCreate, BookingOut
 
 
 router = APIRouter()
@@ -92,52 +92,52 @@ async def login_via_google(request: Request):
 @router.get("/auth")
 async def auth(request: Request, db: Session = Depends(get_db)):    
     try:
-        # Try to get the token from Google's OAuth flow
+        # Get the token from Google's OAuth flow
         token = await oauth.google.authorize_access_token(request)
         if not token:
-            raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="OAuth token missing or invalid")
+            raise HTTPException(status_code=400, detail="OAuth token missing or invalid")
 
         # Extract user info
         user_info = token.get("userinfo")
         if not user_info:
-            raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Failed to fetch user information")
+            raise HTTPException(status_code=400, detail="Failed to fetch user information")
         
-
-
-        # Check if user already exists in the database
+        # Check if user exists
         stmt = select(User).filter(User.google_id == user_info["sub"])
         result = await db.execute(stmt)
-        db_user = result.scalars().first()  # Get the first result, if any
+        db_user = result.scalars().first()
 
-            
         if not db_user:
-            # If user doesn't exist, create a new user
-            new_user = User(
+            # Create a new user if they don't exist
+            db_user = User(
                 email=user_info["email"],
                 username=user_info["name"],
                 profile_picture=user_info.get("picture"),
                 google_id=user_info["sub"]
             )
-            db.add(new_user)
-            # Debug: Check if the new user is added to the session
+            db.add(db_user)
             await db.commit()
-            await db.refresh(new_user)
-
-             # Debug: Log after commit and refresh
+            await db.refresh(db_user)
 
         # Generate JWT token
-        jwt_token = create_jwt_token({"sub": user_info["email"]})
+        jwt_token = create_jwt_token({"sub": db_user.email})
 
-        # Create response object with redirection
-        response = RedirectResponse(url='/')  # Change this URL if needed
-        response.set_cookie(
-            key="access_token",
-            value=jwt_token,
-            httponly=True,  # Prevent JavaScript from accessing it (helps against XSS)
-            samesite="Lax"  # Prevents CSRF (can be changed based on needs)
-        )
+        # Return user and token instead of redirecting
+        return {
+            "message": "Authentication successful",
+            "token": jwt_token,
+            "user": {
+                "id": db_user.id,
+                "email": db_user.email,
+                "username": db_user.username,
+                "profile_picture": db_user.profile_picture,
+                "google_id": db_user.google_id
+            }
+        }
 
-        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
     
     except OAuthError as e:
         raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail=f"OAuth error: {str(e)}")
@@ -154,24 +154,20 @@ async def logout():
 
 # manual signup here 
 @router.post("/signup")
-async def signup(user: UserCreate, db: AsyncSession = Depends(get_db)):
+async def signup(user: UserBase, db: AsyncSession = Depends(get_db)):
     # Check if email or username already exists
-    stmt = select(User).where((User.email == user.email) | (User.username == user.username))
+    stmt = select(User).where((User.email == user.email))
     result = await db.execute(stmt)
     existing_user = result.scalars().first()
 
     if existing_user:
         if existing_user.email == user.email:
             raise HTTPException(status_code=400, detail="Email already registered")
-        if existing_user.username == user.username:
-            raise HTTPException(status_code=400, detail="Username already taken")
 
     # Hash password and create user
     new_user = User(
         email=user.email,
-        username=user.username,
         password=hash_password(user.password),
-        role=user.role,
     )
 
     db.add(new_user)
@@ -184,7 +180,7 @@ async def signup(user: UserCreate, db: AsyncSession = Depends(get_db)):
 
 # manual login here
 @router.post("/login")
-async def login(user: UserLogin, db: AsyncSession = Depends(get_db)):
+async def login(user: UserBase, db: AsyncSession = Depends(get_db)):
     # Check if user exists
     stmt = select(User).where(User.email == user.email)
     result = await db.execute(stmt)
@@ -200,6 +196,31 @@ async def login(user: UserLogin, db: AsyncSession = Depends(get_db)):
 
 
 
+# update the user
+@router.put("/users/{user_id}")
+async def update_user(user_id: int, user_update: UserUpdate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    stmt = select(User).filter(User.id == user_id)
+    result = await db.execute(stmt)
+    user = result.scalars().first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+
+    # Update user fields
+    if user_update.email is not None:
+        user.email = user_update.email
+    if user_update.username is not None:
+        user.username = user_update.username
+    if user_update.profile_picture is not None:
+        user.profile_picture = user_update.profile_picture
+    if user_update.role is not None:
+        user.role = user_update.role
+
+    await db.commit()
+    await db.refresh(user)
+
+    return {"message": "User updated successfully", "user": user}
 
 
 
