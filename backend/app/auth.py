@@ -89,26 +89,25 @@ async def login_via_google(request: Request):
     return await oauth.google.authorize_redirect(request, url)
 
 # Google OAuth callback
+from fastapi.responses import RedirectResponse
+from urllib.parse import urlencode
+
 @router.get("/auth")
 async def auth(request: Request, db: Session = Depends(get_db)):    
     try:
-        # Get the token from Google's OAuth flow
         token = await oauth.google.authorize_access_token(request)
         if not token:
             raise HTTPException(status_code=400, detail="OAuth token missing or invalid")
 
-        # Extract user info
         user_info = token.get("userinfo")
         if not user_info:
             raise HTTPException(status_code=400, detail="Failed to fetch user information")
         
-        # Check if user exists
         stmt = select(User).filter(User.google_id == user_info["sub"])
         result = await db.execute(stmt)
         db_user = result.scalars().first()
 
         if not db_user:
-            # Create a new user if they don't exist
             db_user = User(
                 email=user_info["email"],
                 username=user_info["name"],
@@ -122,21 +121,20 @@ async def auth(request: Request, db: Session = Depends(get_db)):
         # Generate JWT token
         jwt_token = create_jwt_token({"sub": db_user.email})
 
-        # Return user and token instead of redirecting
-        return {
-            "message": "Authentication successful",
+        # Redirect user to frontend with token as query params
+        frontend_url = "http://localhost:5173/google-auth"  # Change this to your frontend's redirect page
+        query_params = urlencode({
             "token": jwt_token,
-            "user": {
-                "id": db_user.id,
-                "email": db_user.email,
-                "username": db_user.username,
-                "profile_picture": db_user.profile_picture,
-                "google_id": db_user.google_id
-            }
-        }
+            "email": db_user.email,
+            "username": db_user.username,
+            "profile_picture": db_user.profile_picture or "",
+            "google_id": db_user.google_id
+        })
+        return RedirectResponse(url=f"{frontend_url}?{query_params}")
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
     
     except OAuthError as e:
