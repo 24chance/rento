@@ -14,6 +14,10 @@ const Navbar = () => {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  const handleButtonClick = () => {
+    window.location.href = "/auth";
+  };
+
   return (
     <motion.nav
       initial={{ y: -50, opacity: 0 }}
@@ -28,8 +32,8 @@ const Navbar = () => {
 
         {/* Desktop Buttons */}
         <div className="hidden md:flex gap-4">
-          <button className="text-gray-700 font-medium hover:text-gray-900 cursor-pointer">Login</button>
-          <button className="px-5 py-2 bg-[var(--primary-color)] text-white font-semibold cursor-pointer rounded-lg shadow-md hover:bg-orange-500 transition">
+          <button onClick={() => handleButtonClick()} className="text-gray-700 font-medium hover:text-gray-900 cursor-pointer">Login</button>
+          <button onClick={() => handleButtonClick()} className="px-5 py-2 bg-[var(--primary-color)] text-white font-semibold cursor-pointer rounded-lg shadow-md hover:bg-orange-500 transition">
             Sign Up
           </button>
         </div>
@@ -51,8 +55,8 @@ const Navbar = () => {
       {isMenuOpen && (
         <div className="absolute top-16 left-1/2 transform -translate-x-1/2 w-full bg-white shadow-md z-50 p-4 md:hidden">
           <div className="flex flex-col gap-4">
-            <button className="text-gray-700 font-medium hover:text-gray-900 cursor-pointer">Login</button>
-            <button className="px-5 py-2 bg-[var(--primary-color)] text-white font-semibold cursor-pointer rounded-lg shadow-md hover:bg-orange-500 transition">
+            <button onClick={() => handleButtonClick()} className="text-gray-700 font-medium hover:text-gray-900 cursor-pointer">Login</button>
+            <button onClick={() => handleButtonClick()} className="px-5 py-2 bg-[var(--primary-color)] text-white font-semibold cursor-pointer rounded-lg shadow-md hover:bg-orange-500 transition">
               Sign Up
             </button>
           </div>
