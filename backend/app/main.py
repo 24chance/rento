@@ -5,15 +5,18 @@ from dotenv import load_dotenv
 import os
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 # Ensure all tables are created based on your models
 async def create_tables():
     async with engine.begin() as conn:  # Start a new connection
-        # Create all tables
         await conn.run_sync(Base.metadata.create_all)
 
-
 app = FastAPI()
+
+# Mounting static files (Modify path if needed)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 load_dotenv()
 
@@ -23,7 +26,6 @@ origins = [
     "http://localhost:3000",     # If using a React or Next.js app on port 3000
     "https://your-frontend-url.com",  # Replace with your production frontend URL if deployed
 ]
-
 
 # Add CORS middleware to allow all origins
 app.add_middleware(
@@ -46,3 +48,12 @@ app.include_router(auth_router)
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
+
+# Endpoint to serve profile pictures directly
+@app.get("/uploads/profile_pictures/{filename}")
+async def get_profile_picture(filename: str):
+    file_path = f"app/uploads/profile_pictures/{filename}"
+    if os.path.exists(file_path):
+        print(file_path)
+        return FileResponse(file_path)
+    return {"error": "File not found"}

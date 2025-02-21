@@ -194,31 +194,58 @@ async def login(user: UserBase, db: AsyncSession = Depends(get_db)):
 
 
 
-# update the user
-@router.put("/users/{user_id}")
-async def update_user(user_id: int, user_update: UserUpdate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+from fastapi import UploadFile, File, Form
+
+@router.patch("/users/{user_id}/profile", response_model=UserUpdate)
+async def update_user_profile(
+    user_id: int,
+    file: UploadFile = File(None),  # Make file optional
+    username: str = Form(None),  # Optional username
+    role: str = Form(None),  # Optional role
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Ensure the current user is updating their own profile (or admin)
+    if user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this profile")
+
+    # Fetch the user from the database
     stmt = select(User).filter(User.id == user_id)
     result = await db.execute(stmt)
-    user = result.scalars().first()
+    db_user = result.scalars().first()
 
-    if not user:
+    if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # Handle profile picture upload if provided
+    if file:
+        upload_dir = "uploads/profile_pictures"
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        file_extension = os.path.splitext(file.filename)[1]
+        new_filename = f"user_{user_id}_{int(datetime.utcnow().timestamp())}{file_extension}"
+        file_path = os.path.join(upload_dir, new_filename)
+        
+        with open(file_path, "wb") as f:
+            content = await file.read()  # Read file content asynchronously
+            f.write(content)
+        
+        db_user.profile_picture = file_path  # Update profile picture
 
-    # Update user fields
-    if user_update.email is not None:
-        user.email = user_update.email
-    if user_update.username is not None:
-        user.username = user_update.username
-    if user_update.profile_picture is not None:
-        user.profile_picture = user_update.profile_picture
-    if user_update.role is not None:
-        user.role = user_update.role
+    # Update username if provided
+    if username:
+        db_user.username = username
 
+    # Update role if provided
+    if role:
+        db_user.role = role
+
+    # Commit changes
     await db.commit()
-    await db.refresh(user)
+    await db.refresh(db_user)
 
-    return {"message": "User updated successfully", "user": user}
+    return db_user
+
 
 
 

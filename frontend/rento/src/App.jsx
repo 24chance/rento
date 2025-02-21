@@ -3,6 +3,7 @@ import React from 'react';
 import Authpage from './pages/Authpage';
 import GoogleAuth from './comps/GoogleAuth';
 import Home from './pages/Home';
+import OnboardingForm from "./pages/Onboarding";
 
 
 function App() {
@@ -13,6 +14,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/auth" element={<Authpage />} />
         <Route path="/google-auth" element={<GoogleAuth />} />
+        <Route path="/onboarding" element={<OnboardingForm />} />
       </Routes>
     </Router>
   );

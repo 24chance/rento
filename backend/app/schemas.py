@@ -12,11 +12,14 @@ class UserBase(BaseModel):
 
 
 class UserUpdate(BaseModel):
+    id: int
     email: Optional[str]
-    username: Optional[str]
-    role: Optional[str] 
-    profile_picture: Optional[str]
+    username: Optional[str] = None
+    profile_picture: Optional[str] = None
+    role: Optional[str]
 
+    class Config:
+        orm_mode = True
 
 # Houses
 class HouseCreate(BaseModel):
