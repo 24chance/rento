@@ -201,17 +201,15 @@ from fastapi import UploadFile, File, Form
 @router.patch("/users/{user_id}/profile", response_model=UserUpdate)
 async def update_user_profile(
     user_id: int,
-    file: UploadFile = File(None),  # Make file optional
-    username: str = Form(None),  # Optional username
-    role: str = Form(None),  # Optional role
+    file: UploadFile = File(None),  # Optional file
+    username: str = Form(None),
+    role: str = Form(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Ensure the current user is updating their own profile (or admin)
     if user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to update this profile")
 
-    # Fetch the user from the database
     stmt = select(User).filter(User.id == user_id)
     result = await db.execute(stmt)
     db_user = result.scalars().first()
@@ -219,7 +217,7 @@ async def update_user_profile(
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Handle profile picture upload if provided
+    
     if file:
         upload_dir = "uploads/profile_pictures"
         os.makedirs(upload_dir, exist_ok=True)
@@ -231,18 +229,19 @@ async def update_user_profile(
         with open(file_path, "wb") as f:
             content = await file.read()  # Read file content asynchronously
             f.write(content)
-        
-        db_user.profile_picture = file_path  # Update profile picture
 
-    # Update username if provided
+
+        
+        # Log the file path for debugging
+        print(f"Profile picture saved at: {file_path}")
+        db_user.profile_picture = file_path
+
     if username:
         db_user.username = username
 
-    # Update role if provided
     if role:
         db_user.role = role
 
-    # Commit changes
     await db.commit()
     await db.refresh(db_user)
 
