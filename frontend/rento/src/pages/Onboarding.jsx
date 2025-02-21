@@ -3,28 +3,40 @@ import { useForm } from 'react-hook-form';
 import { FaPen } from 'react-icons/fa';
 import ClipLoader from 'react-spinners/ClipLoader';
 import api from '../api/axios';
-
+import { Navigate } from 'react-router-dom';
 
 const OnboardingForm = () => {
+  // Check for user in localStorage
+  const storedUser = localStorage.getItem("user");
+  if (!storedUser) {
+    // If no user, send to /auth
+    return <Navigate to="/auth" replace />;
+  }
+  const user = JSON.parse(storedUser);
+  if (user.user.role && user.user.role !== "None") {
+    // If username exists, user is onboarded, send them to dashboard
+    return <Navigate to="/dashboard" replace />;
+  }
+
   const { register, handleSubmit, formState: { errors } } = useForm();
   const [profile_picture, setProfile_picture] = useState(null);
   const [profilePicPreview, setProfilePicPreview] = useState(null);
   const [role, setRole] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
- const handleImageUpload = (e) => {
-  const file = e.target.files[0];
-  if (file) {
-    setProfile_picture(file); // Keep the file for upload
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setProfile_picture(file); // Keep the file for upload
 
-    // Generate a preview for UI display
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setProfilePicPreview(reader.result);
-    };
-    reader.readAsDataURL(file);
-  }
-};
+      // Generate a preview for UI display
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfilePicPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const onSubmit = async (data) => {
     if (!role) {
@@ -40,29 +52,24 @@ const OnboardingForm = () => {
     formData.append("role", role);
     formData.append("file", profile_picture);
 
-
-     // Get the user ID from local storage
-    const storedUser = localStorage.getItem("user");
+    // Get the user ID from local storage
     let userId = null;
-    let accessToken = null;
-
     if (storedUser) {
-      userId = JSON.parse(storedUser).user.id;
-      accessToken = JSON.parse(storedUser).access_token;
+      const parsed = JSON.parse(storedUser);
+      userId = parsed.user.id;
     }
     try {
       const response = await api.patch(`/users/${userId}/profile`, formData, {
-      headers: {
-        "Content-Type": "multipart/form-data", 
-      },
-    });
-      console.log(response)
+        headers: {
+          "Content-Type": "multipart/form-data", 
+        },
+      });
+      console.log(response);
     } catch (error) {
-      console.error("Login failed:", error.response || error.message);
+      console.error("Onboarding failed:", error.response || error.message);
     } finally {
       setIsLoading(false);
     }
-
   };
 
   return (
@@ -71,7 +78,6 @@ const OnboardingForm = () => {
         onSubmit={handleSubmit(onSubmit)} 
         className="w-full max-w-md space-y-6 bg-white p-8 rounded-md shadow-md"
       >
-
          {/* Explanation Text */}
          <div className="mb-4 text-center">
           <h2 className="text-2xl font-bold text-gray-700">Welcome Aboard!</h2>

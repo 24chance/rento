@@ -2,9 +2,30 @@ import React, { useState } from 'react';
 import Login from '../comps/Login';   
 import Signup from '../comps/Signup'; 
 import GoogleLoginButton from '../comps/GoogleLoginButton';
+import { Navigate } from 'react-router-dom';
+
 
 const Authpage = () => {
   const [activeTab, setActiveTab] = useState('login');
+
+    // Get user data from localStorage
+    const storedUser = localStorage.getItem("user");
+    let user = null;
+  
+    if (storedUser) {
+      try {
+        user = JSON.parse(storedUser);
+      } catch (error) {
+        console.error("Error parsing user data", error);
+      }
+    }
+  
+    // If there's a user, redirect to dashboard
+    if (user) {
+      console.log("User:", user);
+       return <Navigate to="/dashboard" replace />;
+    }
+  
 
 
   return (

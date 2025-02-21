@@ -22,6 +22,9 @@ const Login = () => {
       const response = await api.post("/login", data);
       // Store user data in local storage 
       localStorage.setItem("user", JSON.stringify(response.data));
+
+      // navigate to dashboard
+      window.location.href = "/dashboard";
     } catch (error) {
       console.error("Login failed:", error.response?.data || error.message);
     } finally {
