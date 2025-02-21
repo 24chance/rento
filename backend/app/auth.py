@@ -128,6 +128,8 @@ async def auth(request: Request, db: Session = Depends(get_db)):
             "email": db_user.email,
             "username": db_user.username,
             "profile_picture": db_user.profile_picture or "",
+            "role": db_user.role,
+            "id": db_user.id,
             "google_id": db_user.google_id
         })
         return RedirectResponse(url=f"{frontend_url}?{query_params}")
