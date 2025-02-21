@@ -2,37 +2,67 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { FaPen } from 'react-icons/fa';
 import ClipLoader from 'react-spinners/ClipLoader';
+import api from '../api/axios';
+
 
 const OnboardingForm = () => {
   const { register, handleSubmit, formState: { errors } } = useForm();
-  const [profilePic, setProfilePic] = useState(null);
+  const [profile_picture, setProfile_picture] = useState(null);
+  const [profilePicPreview, setProfilePicPreview] = useState(null);
   const [role, setRole] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onloadend = () => {
-        setProfilePic(reader.result);
-      };
-    }
-  };
+ const handleImageUpload = (e) => {
+  const file = e.target.files[0];
+  if (file) {
+    setProfile_picture(file); // Keep the file for upload
+
+    // Generate a preview for UI display
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setProfilePicPreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+  }
+};
 
   const onSubmit = async (data) => {
     if (!role) {
       alert("Please select a role");
       return;
     }
+
     setIsLoading(true);
-    const payload = { ...data, role, profilePic };
-    console.log(payload.profilePic);
-    console.log(payload);
-    // Simulate API call delay
-    setTimeout(() => {
+
+    // Create FormData object
+    const formData = new FormData();
+    formData.append("username", data.username);
+    formData.append("role", role);
+    formData.append("file", profile_picture);
+
+
+     // Get the user ID from local storage
+    const storedUser = localStorage.getItem("user");
+    let userId = null;
+    let accessToken = null;
+
+    if (storedUser) {
+      userId = JSON.parse(storedUser).user.id;
+      accessToken = JSON.parse(storedUser).access_token;
+    }
+    try {
+      const response = await api.patch(`/users/${userId}/profile`, formData, {
+      headers: {
+        "Content-Type": "multipart/form-data", 
+      },
+    });
+      console.log(response)
+    } catch (error) {
+      console.error("Login failed:", error.response || error.message);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
+
   };
 
   return (
@@ -55,7 +85,7 @@ const OnboardingForm = () => {
           <div className="relative w-24 h-24">
             <label htmlFor="fileUpload" className="cursor-pointer">
               <img
-                src={profilePic || "https://e7.pngegg.com/pngimages/321/296/png-clipart-computer-icons-user-svg-free-customers-miscellaneous-text-thumbnail.png"}
+                src={profilePicPreview || "https://e7.pngegg.com/pngimages/321/296/png-clipart-computer-icons-user-svg-free-customers-miscellaneous-text-thumbnail.png"}
                 alt="Profile"
                 className="w-24 h-24 rounded-full object-cover"
               />
