@@ -190,7 +190,7 @@ async def login(user: UserBase, db: AsyncSession = Depends(get_db)):
     # Generate JWT token
     jwt_token = create_jwt_token({"sub": existing_user.email})
 
-    return {"access_token": jwt_token, "token_type": "bearer"}
+    return {"access_token": jwt_token, "token_type": "bearer", "user": existing_user}
 
 
 
