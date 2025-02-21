@@ -8,7 +8,7 @@ import bgImage from "../../assets/hero-bg.jpg";
 const HeroSection = () => {
   return (
     <section
-      className="relative mt-35 md:mt-30 flex flex-col md:flex-row items-center justify-between gap-5 px-8 md:px-16 lg:px-24 py-16" 
+      className="bg-gradient-to-b from-white to-[#ffdec9] relative mt-35 md:mt-30 flex flex-col md:flex-row items-center justify-between gap-5 px-8 md:px-16 lg:px-24 py-16" 
     >
 
       {/* Background Image with Overlay - Only Visible on Small Screens */}

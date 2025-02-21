@@ -57,7 +57,7 @@ const FeaturedListings = () => {
   }, [selectedHouse]);
 
   return (
-    <div className="relative overflow-hidden py-16">
+    <div className="bg-gradient-to-b from-[#ffdec9] to-[#ffffff] relative overflow-hidden py-16">
       <h2 className="text-3xl font-bold px-12 mt-8">Top Rentals</h2>
       <p className="text-gray-600 px-12 mb-8">
         Explore our top featured listings, showcasing the best properties for your next stay.
