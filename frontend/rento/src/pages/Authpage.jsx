@@ -22,7 +22,6 @@ const Authpage = () => {
   
     // If there's a user, redirect to dashboard
     if (user) {
-      console.log("User:", user);
        return <Navigate to="/dashboard" replace />;
     }
   

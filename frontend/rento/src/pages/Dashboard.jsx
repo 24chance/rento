@@ -1,7 +1,9 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
+import OwnerDashboard from '../comps/dashboard/OwnersDash';
+import RenterDashboard from '../comps/dashboard/RenterDash';
 
-const Dashboard = ({ children }) => {
+const Dashboard = () => {
   const storedUser = localStorage.getItem("user");
   let user = null;
   if (storedUser) {
@@ -12,22 +14,22 @@ const Dashboard = ({ children }) => {
     }
   }
 
-  // If there's no user, redirect to the login page
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
+  // Redirect if no user
+  if (!user) return <Navigate to="/auth" replace />;
 
-  // If user exists but role is null, redirect to onboarding
-  if (user && user.user.role === null || user.user.role === 'None') {
+  // If role is missing, go to onboarding
+  if (!user.user.role || user.user.role === 'None' || user.user.role === "") {
     return <Navigate to="/onboarding" replace />;
   }
 
-  // Otherwise, render the dashboard
-  return (
-    <div>
-      {children}
-    </div>
-  );
+  // Route based on role
+  if (user.user.role === "Owner") {
+    return <OwnerDashboard />;
+  } else if (user.user.role === "Renter") {
+    return <RenterDashboard />;
+  } else {
+    return <Navigate to="/auth" replace />;
+  }
 };
 
 export default Dashboard;

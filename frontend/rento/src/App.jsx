@@ -16,7 +16,7 @@ function App() {
         <Route path="/auth" element={<Authpage />} />
         <Route path="/google-auth" element={<GoogleAuth />} />
         <Route path="/onboarding" element={<OnboardingForm />} />
-        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/dashboard/*" element={<Dashboard />} />
       </Routes>
     </Router>
   );

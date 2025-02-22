@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { FaPen } from 'react-icons/fa';
 import ClipLoader from 'react-spinners/ClipLoader';
@@ -13,16 +13,48 @@ const OnboardingForm = () => {
     return <Navigate to="/auth" replace />;
   }
   const user = JSON.parse(storedUser);
+  // If user is onboarded (has a role that's not None), redirect to dashboard
   if (user.user.role && user.user.role !== "None") {
-    // If username exists, user is onboarded, send them to dashboard
     return <Navigate to="/dashboard" replace />;
   }
 
-  const { register, handleSubmit, formState: { errors } } = useForm();
+  // Initialize react-hook-form with default value for username if available
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    formState: { errors },
+  } = useForm({
+    defaultValues: {
+      username: user.user.username || "",
+    },
+  });
+  
   const [profile_picture, setProfile_picture] = useState(null);
   const [profilePicPreview, setProfilePicPreview] = useState(null);
   const [role, setRole] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+
+  // Set profile picture preview if one exists in user data
+  useEffect(() => {
+      // Only set the initial preview if none is selected yet.
+      const profilePicTemp = user.user.profilePicture || user.user.profile_picture;
+      if (!profilePicPreview && profilePicTemp) {
+        // Check if it starts with "http" or "https"
+        if (profilePicTemp.startsWith("http")) {
+          setProfilePicPreview(profilePicTemp);
+        } else {
+          // Assume it's a relative path – prepend your base URL if necessary
+          setProfilePicPreview(`${API_BASE_URL}${profilePicTemp}`);
+        }
+      }
+      // Also update the username field if user already has a username
+      if (user.user.username) {
+        setValue("username", user.user.username);
+    }
+  }, [user.user, profilePicPreview, setValue]);
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
@@ -64,7 +96,11 @@ const OnboardingForm = () => {
           "Content-Type": "multipart/form-data", 
         },
       });
-      console.log(response);
+      // Save the new data in localStorage
+      localStorage.setItem("user", JSON.stringify(response.data));
+
+      // Navigate to dashboard
+      // window.location.href = "/dashboard";
     } catch (error) {
       console.error("Onboarding failed:", error.response || error.message);
     } finally {

@@ -3,7 +3,8 @@ import { FiEye, FiEyeOff } from 'react-icons/fi';
 import { useForm } from 'react-hook-form';
 import api from '../api/axios';
 import ClipLoader from 'react-spinners/ClipLoader';
-
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -17,16 +18,16 @@ const Login = () => {
 
   const onSubmit = async (data) => {
     setIsLoading(true);
-
     try {
       const response = await api.post("/login", data);
       // Store user data in local storage 
       localStorage.setItem("user", JSON.stringify(response.data));
-
-      // navigate to dashboard
+      toast.success("Login successful!");
+      // Navigate to dashboard
       window.location.href = "/dashboard";
     } catch (error) {
       console.error("Login failed:", error.response?.data || error.message);
+      toast.error("Login failed: " + (error.response?.data?.detail || error.message));
     } finally {
       setIsLoading(false);
     }
@@ -34,6 +35,7 @@ const Login = () => {
 
   return (
     <div>
+      <ToastContainer />
       {/* Login Form */}
       <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
         {/* Email Field */}
@@ -82,11 +84,10 @@ const Login = () => {
             >
               {showPassword ? <FiEyeOff size={20} /> : <FiEye size={20} />}
             </div>
-
-            </div>
-            {errors.password && (
-              <p className="text-red-500 text-sm mt-1">{errors.password.message}</p>
-            )}
+          </div>
+          {errors.password && (
+            <p className="text-red-500 text-sm mt-1">{errors.password.message}</p>
+          )}
         </div>
 
         {/* Submit Button */}
