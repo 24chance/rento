@@ -245,7 +245,7 @@ async def update_user_profile(
     await db.commit()
     await db.refresh(db_user)
 
-    return db_user
+    return {"user": db_user}
 
 
 
