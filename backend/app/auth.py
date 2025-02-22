@@ -232,8 +232,6 @@ async def update_user_profile(
 
 
         
-        # Log the file path for debugging
-        print(f"Profile picture saved at: {file_path}")
         db_user.profile_picture = file_path
 
     if username:
@@ -241,6 +239,8 @@ async def update_user_profile(
 
     if role:
         db_user.role = role
+
+    # return the user data 
 
     await db.commit()
     await db.refresh(db_user)
@@ -416,7 +416,7 @@ async def confirm_booking(booking_id: int, db: AsyncSession = Depends(get_db), c
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
     
-    if booking.status == 'cancelled':
+    if booking.status == 'cancel':
         raise HTTPException(status_code=400, detail="Canceled bookings cannot be confirmed")
 
     # Ensure that `house` is loaded first
@@ -430,7 +430,7 @@ async def confirm_booking(booking_id: int, db: AsyncSession = Depends(get_db), c
     if house.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to confirm this booking")
 
-    booking.status = 'confirmed'
+    booking.status = 'confirm'
     await db.commit() 
     await db.refresh(booking)
 
@@ -448,7 +448,7 @@ async def cancel_booking(booking_id: int, db: AsyncSession = Depends(get_db), cu
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
     
-    if booking.status == 'cancelled':
+    if booking.status == 'cancel':
         raise HTTPException(status_code=400, detail="Booking is already cancelled")
 
     # Ensure that `house` is loaded first
@@ -462,7 +462,7 @@ async def cancel_booking(booking_id: int, db: AsyncSession = Depends(get_db), cu
     if house.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to cancel this booking")
 
-    booking.status = 'cancelled'
+    booking.status = 'cancel'
     await db.commit() 
     await db.refresh(booking)
 
